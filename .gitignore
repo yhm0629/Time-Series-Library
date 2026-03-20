@@ -170,3 +170,7 @@ run_anylearn.py
 environment.txt
 README_zh.md
 README.md
+CONTRIBUTING.md
+docker-compose.yml
+Dockerfile
+LICENSE
