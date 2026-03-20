@@ -848,3 +848,61 @@ class UEAloader(Dataset):
 
     def __len__(self):
         return len(self.all_IDs)
+
+class PEMSLoader(Dataset):
+    def __init__(self, args, root_path, flag='train', size=None,
+                 features='M', data_path='PEMS04.npz',
+                 target='OT', scale=True, timeenc=0, freq='h', seasonal_patterns=None):
+        self.seq_len = size[0]
+        self.label_len = size[1]
+        self.pred_len = size[2]
+        
+        assert flag in ['train', 'test', 'val']
+        type_map = {'train': 0, 'val': 1, 'test': 2}
+        self.set_type = type_map[flag]
+
+        self.root_path = root_path
+        self.data_path = data_path
+        self.scale = scale
+        self.__read_data__()
+
+    def __read_data__(self):
+        self.scaler = StandardScaler()
+        data = np.load(os.path.join(self.root_path, self.data_path))['data'][:, :, 0]
+        
+        num_train = int(len(data) * 0.6)
+        num_test = int(len(data) * 0.2)
+        num_vali = len(data) - num_train - num_test
+        border1s = [0, num_train - self.seq_len, len(data) - num_test - self.seq_len]
+        border2s = [num_train, num_train + num_vali, len(data)]
+        
+        border1 = border1s[self.set_type]
+        border2 = border2s[self.set_type]
+
+        if self.scale:
+            train_data = data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data)
+            data = self.scaler.transform(data)
+        
+        self.data_x = data[border1:border2]
+        self.data_y = data[border1:border2]
+        self.data_stamp = np.zeros((len(self.data_x), 4)) 
+
+    def __getitem__(self, index):
+        s_begin = index
+        s_end = s_begin + self.seq_len
+        r_begin = s_end - self.label_len
+        r_end = r_begin + self.label_len + self.pred_len
+
+        seq_x = self.data_x[s_begin:s_end]
+        seq_y = self.data_y[r_begin:r_end]
+        seq_x_mark = self.data_stamp[s_begin:s_end]
+        seq_y_mark = self.data_stamp[r_begin:r_end]
+
+        return seq_x, seq_y, seq_x_mark, seq_y_mark
+
+    def __len__(self):
+        return len(self.data_x) - self.seq_len - self.pred_len + 1
+
+    def inverse_transform(self, data):
+        return self.scaler.inverse_transform(data)

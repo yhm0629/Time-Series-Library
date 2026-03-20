@@ -48,15 +48,25 @@ class RevIN(nn.Module):
         return x * stdev + mean
 
 class KANLayer(nn.Module):
-    def __init__(self, in_features, out_features, grid_size=5, spline_order=3, momentum=0.1):
+    def __init__(self, in_features, out_features, grid_size=5, spline_order=3, momentum=0.1, context_dim=None):
         super(KANLayer, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.grid_size = grid_size
         self.spline_order = spline_order
         self.momentum = momentum
+        
         self.base_weight = nn.Parameter(torch.randn(out_features, in_features) * 0.1)
         self.spline_weight = nn.Parameter(torch.randn(out_features, in_features, grid_size + spline_order) * 0.1)
+        
+        if context_dim is not None:
+            self.context_gate = nn.Sequential(
+                nn.Linear(context_dim, out_features),
+                nn.Sigmoid()
+            )
+        else:
+            self.context_gate = None
+
         self.register_buffer('running_min', torch.full((in_features,), -1.0))
         self.register_buffer('running_max', torch.full((in_features,), 1.0))
         grid = self._generate_grid(-1.0, 1.0, in_features, device='cpu')
@@ -100,11 +110,16 @@ class KANLayer(nn.Module):
                     (right_num / (right_den + 1e-8)) * bases[:, :, 1:]
         return bases
 
-    def forward(self, x):
+    def forward(self, x, context=None):
         self._auto_update_grid(x)
         base_output = F.linear(x, self.base_weight)
         spline_basis = self.b_splines(x)
         spline_output = torch.einsum("bik,oik->bo", spline_basis, self.spline_weight)
+        
+        if self.context_gate is not None and context is not None:
+            gating = self.context_gate(context)
+            return (base_output + spline_output) * gating
+        
         return base_output + spline_output
 
 class SpectralKANBlock(nn.Module):
@@ -112,26 +127,83 @@ class SpectralKANBlock(nn.Module):
         super(SpectralKANBlock, self).__init__()
         self.channels = channels
         self.freq_groups = freq_groups
-        self.kan_real = nn.ModuleList([KANLayer(channels, channels, grid_size=grid_size) for _ in range(freq_groups)])
-        self.kan_imag = nn.ModuleList([KANLayer(channels, channels, grid_size=grid_size) for _ in range(freq_groups)])
+        
+        # 1. 时域上下文提取器
+        self.context_extractor = nn.Sequential(
+            nn.Conv1d(channels, channels, kernel_size=3, padding=1, groups=channels),
+            nn.GELU(),
+            nn.AdaptiveAvgPool1d(1)
+        )
+        
+        # 2. 动态自适应低通滤波器 (Learnable LPF)
+        # 预测归一化的截止频率 (0, 1)
+        self.cutoff_predictor = nn.Sequential(
+            nn.Linear(channels, channels),
+            nn.Sigmoid() 
+        )
+        # 滤波器陡峭度，初始化为一个较大的值以模拟硬截断，但在训练中可自适应调节
+        self.filter_steepness = nn.Parameter(torch.tensor(10.0))
+        
+        # 3. KAN 映射层
+        self.kan_real = nn.ModuleList([
+            KANLayer(channels, channels, grid_size=grid_size, context_dim=channels) for _ in range(freq_groups)
+        ])
+        self.kan_imag = nn.ModuleList([
+            KANLayer(channels, channels, grid_size=grid_size, context_dim=channels) for _ in range(freq_groups)
+        ])
         self.group_weights = nn.Parameter(torch.ones(freq_groups))
 
     def forward(self, x):
         B, L, C = x.shape
+        
+        # 提取时域上下文 (B, C)
+        context = self.context_extractor(x.transpose(1, 2)).squeeze(-1) 
+        
+        # 生成动态截止频率 (B, C)
+        normalized_cutoff = self.cutoff_predictor(context)
+        
+        # 频域变换
         x_fft = torch.fft.rfft(x, dim=1, norm='ortho')
         real, imag = x_fft.real, x_fft.imag
         V = real.shape[1]
+        
+        # ==========================================
+        # 核心干预：自适应软掩码低通滤波 (Adaptive Soft LPF)
+        # ==========================================
+        # 构建归一化频率网格 (1, V, 1)
+        freq_grid = torch.linspace(0.0, 1.0, steps=V, device=x.device).view(1, V, 1)
+        
+        # 扩展截止频率以匹配维度 (B, 1, C)
+        cutoff_expanded = normalized_cutoff.unsqueeze(1)
+        
+        # 计算可微软掩码：Sigmoid( tau * (cutoff - freq) )
+        # 输出维度 (B, V, C)
+        lpf_mask = torch.sigmoid(self.filter_steepness * (cutoff_expanded - freq_grid))
+        
+        # 应用低通滤波
+        real = real * lpf_mask
+        imag = imag * lpf_mask
+        # ==========================================
+        
         out_real, out_imag = torch.zeros_like(real), torch.zeros_like(imag)
         for i in range(self.freq_groups):
             start = (i * V) // self.freq_groups
             end = ((i + 1) * V) // self.freq_groups if i < self.freq_groups - 1 else V
             if start == end: continue
+            
             real_group = real[:, start:end, :].reshape(-1, C)
             imag_group = imag[:, start:end, :].reshape(-1, C)
-            real_out = self.kan_real[i](real_group).view(B, end-start, C)
-            imag_out = self.kan_imag[i](imag_group).view(B, end-start, C)
+            
+            num_freq = end - start
+            context_expanded = context.unsqueeze(1).expand(-1, num_freq, -1).reshape(-1, C)
+            
+            # KAN 映射
+            real_out = self.kan_real[i](real_group, context=context_expanded).view(B, num_freq, C)
+            imag_out = self.kan_imag[i](imag_group, context=context_expanded).view(B, num_freq, C)
+            
             out_real[:, start:end, :] = real_out * self.group_weights[i]
             out_imag[:, start:end, :] = imag_out * self.group_weights[i]
+            
         out_fft = torch.complex(out_real, out_imag)
         return torch.fft.irfft(out_fft, n=L, dim=1, norm='ortho')
 
@@ -159,28 +231,26 @@ class Model(nn.Module):
         self.configs = configs
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
-        self.pred_len = configs.pred_len
+        self.pred_len = getattr(configs, 'pred_len', 0)
         self.channels = configs.enc_in
-        self.c_out = configs.c_out
-        self.revin = RevIN(self.channels)
+        self.c_out = getattr(configs, 'c_out', self.channels)
         
-        # 核心修改：为每一层分配独立的 LayerNorm 用于 Pre-LN
-        self.encoder = nn.ModuleList([
-            SpectralKANBlock(
-                self.channels, 
-                grid_size=getattr(configs, 'grid_size', 5),
-                freq_groups=getattr(configs, 'freq_groups', 4)
-            ) for _ in range(configs.e_layers)
-        ])
-        self.encoder_norms = nn.ModuleList([
-            nn.LayerNorm(self.channels) for _ in range(configs.e_layers)
-        ])
-        
-        self.target_slice = slice(0, self.c_out)
+        if self.task_name != 'classification':
+            self.revin = RevIN(self.channels)
+            # 权重共享机制下，只需定义一个 LayerNorm
+            self.shared_norm = nn.LayerNorm(self.channels)
+            self.target_slice = slice(0, self.c_out)
+
+        # 核心修改：跨层权重共享机制下，仅实例化唯一的 SpectralKANBlock
+        self.shared_encoder_block = SpectralKANBlock(
+            self.channels, 
+            grid_size=getattr(configs, 'grid_size', 5),
+            freq_groups=getattr(configs, 'freq_groups', 4)
+        )
 
         if self.task_name in ['long_term_forecast', 'short_term_forecast']:
             self.predict_linear = nn.Linear(self.seq_len, self.pred_len + self.seq_len)
-            self.projection = nn.Linear(self.channels, configs.c_out, bias=True)
+            self.projection = nn.Linear(self.channels, self.c_out, bias=True)
         elif self.task_name == 'classification':
             self.classification_head = MLPLayer(
                 in_features=self.channels,
@@ -189,12 +259,15 @@ class Model(nn.Module):
                 drop=getattr(configs, 'dropout', 0.1)
             )
         else:
-            self.projection = nn.Linear(self.channels, configs.c_out, bias=True)
+            self.projection = nn.Linear(self.channels, self.c_out, bias=True)
 
     def _execute_encoder(self, z):
-        # 核心逻辑：z = z + layer(norm(z))
-        for i, layer in enumerate(self.encoder):
-            z = z + layer(self.encoder_norms[i](z))
+        # 权重共享迭代 (Iterative Refinement)
+        for _ in range(self.configs.e_layers):
+            if self.task_name == 'classification':
+                z = z + self.shared_encoder_block(z) 
+            else:
+                z = z + self.shared_encoder_block(self.shared_norm(z)) 
         return z
 
     def forecast(self, x_enc):
@@ -221,8 +294,7 @@ class Model(nn.Module):
         return self.revin(dec_out, 'denorm', target_slice=self.target_slice)
 
     def classification(self, x_enc):
-        z = self.revin(x_enc, 'norm')
-        z = self._execute_encoder(z)
+        z = self._execute_encoder(x_enc)
         z = torch.mean(z, dim=1) 
         return self.classification_head(z)
 

@@ -276,10 +276,7 @@ class Block(nn.Module):
         return x.permute(0, 2, 1)
 
 class Model(nn.Module):
-    r""" UniConvNet (Adapted for Time-Series-Library)
-    支持预测(Forecasting)和异常检测(Anomaly Detection)双任务
-    """
-    def __init__(self, configs): # 强行接收官方库的 configs
+    def __init__(self, configs): 
         super().__init__()
         # 1. 从 configs 获取物理量与任务指令
         self.task_name = configs.task_name
@@ -335,9 +332,6 @@ class Model(nn.Module):
         for _ in range(3):
             self.last_len = (self.last_len - 1) // 2 + 1
         
-        # 3. ======= 核心改造区：任务头 =======
-        # 删除预测任务头，只保留异常检测和填补任务头
-        # 3. ======= 核心改造区：任务头 =======
         if self.task_name in ['anomaly_detection', 'imputation']:
             self.projection = nn.Linear(dims[-1] * self.last_len, self.seq_len * self.enc_in)
         elif self.task_name == 'classification':
@@ -345,16 +339,15 @@ class Model(nn.Module):
             self.num_class = getattr(configs, 'num_class', 10)
             self.dropout_rate = getattr(configs, 'dropout', 0.1)
             
-            # 嵌入现有的 MLPLayer
-            # in_features: 展平后的总维度
-            # hidden_features: 设为通道维度 dims[-1] 作为缓冲
-            # out_features: 目标类别数
             self.class_head = MLPLayer(
                 in_features=dims[-1] * self.last_len,
                 hidden_features=dims[-1],
                 out_features=self.num_class,
                 drop=self.dropout_rate
             )
+        elif self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            # 预测任务头 (映射到未来 pred_len)
+            self.head = nn.Linear(dims[-1] * self.last_len, self.pred_len * self.enc_in)
         else:
             raise ValueError(f"Not available: {self.task_name}")
 
@@ -405,9 +398,6 @@ class Model(nn.Module):
             x = self.stages[i](x)
         return x
 
-    # 4. ======= 标准化前向传播入口 =======
-    # 必须接收官方库喂入的 5 个张量，即便你只用第一个 x_enc
-    # 4. ======= 标准化前向传播入口 =======
     def forward(self, x_enc, x_mark_enc=None, x_dec=None, x_mark_dec=None, mask=None):
         
         # 1. 动态决定是否应用 RevIN 规范化
@@ -441,7 +431,15 @@ class Model(nn.Module):
             
             # 直接返回 Logits
             return x
+            
+        elif self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            # 路径 C：预测任务
+            x = self.head(x)
+            x = x.reshape(x.shape[0], self.pred_len, self.enc_in)
 
+            # 预测任务需要逆平稳化还原量纲
+            x = self.revin(x, mode='denorm')
+            return x
 
 class LayerNorm(nn.Module):
     r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
