@@ -4,7 +4,7 @@ from models import Autoformer, Transformer, TimesNet, Nonstationary_Transformer,
     Informer, LightTS, Reformer, ETSformer, Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer, \
     Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN, MambaSimple, TemporalFusionTransformer, SCINet, PAttn, TimeXer, \
     WPMixer, MultiPatchFormer, KANAD, MSGNet, TimeFilter, Sundial, TimeMoE, Chronos, Moirai, TiRex,\
-    TimesFM, Chronos2, Unifft, UniConvNet1D, UniConvNet_A, Unifft_P0, Unifft_P1, Unifft_P2, Unifft_B, Unifft_L, Unifft_XL, \
+    TimesFM, Chronos2, Unifft, UniConvNet1D, UniConvNet_A, \
     unifftnet, DistriNet
 
 
@@ -54,12 +54,6 @@ class Exp_Basic(object):
             'Unifft': Unifft,
             'UniConvNet1D': UniConvNet1D,
             'UniConvNet_A': UniConvNet_A,
-            'Unifft_P0': Unifft_P0,
-            'Unifft_P1': Unifft_P1,
-            'Unifft_P2': Unifft_P2,
-            'Unifft_B': Unifft_B,
-            'Unifft_L': Unifft_L,
-            'Unifft_XL': Unifft_XL,
             'UnifftNet': unifftnet,
             'DistriNet': DistriNet
         }

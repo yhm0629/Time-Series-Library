@@ -61,7 +61,6 @@ class KANLayer(nn.Module):
         self.register_buffer('running_max', torch.full((in_features,), 1.0))
         grid = self._generate_grid(-1.0, 1.0, in_features, device='cpu')
         self.grid = nn.Parameter(grid, requires_grad=False)
-
     def _generate_grid(self, x_min, x_max, in_features, device):
         if isinstance(x_min, float):
             x_min = torch.full((in_features,), x_min, device=device)
@@ -106,7 +105,6 @@ class KANLayer(nn.Module):
         spline_basis = self.b_splines(x)
         spline_output = torch.einsum("bik,oik->bo", spline_basis, self.spline_weight)
         return base_output + spline_output
-
 class SpectralKANBlock(nn.Module):
     def __init__(self, channels, grid_size=5, freq_groups=4):
         super(SpectralKANBlock, self).__init__()
@@ -115,7 +113,6 @@ class SpectralKANBlock(nn.Module):
         self.kan_real = nn.ModuleList([KANLayer(channels, channels, grid_size=grid_size) for _ in range(freq_groups)])
         self.kan_imag = nn.ModuleList([KANLayer(channels, channels, grid_size=grid_size) for _ in range(freq_groups)])
         self.group_weights = nn.Parameter(torch.ones(freq_groups))
-
     def forward(self, x):
         B, L, C = x.shape
         x_fft = torch.fft.rfft(x, dim=1, norm='ortho')
@@ -134,7 +131,6 @@ class SpectralKANBlock(nn.Module):
             out_imag[:, start:end, :] = imag_out * self.group_weights[i]
         out_fft = torch.complex(out_real, out_imag)
         return torch.fft.irfft(out_fft, n=L, dim=1, norm='ortho')
-
 class MLPLayer(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, drop=0.):
         super().__init__()
@@ -144,7 +140,6 @@ class MLPLayer(nn.Module):
         self.act = nn.GELU()
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
-
     def forward(self, x):
         x = self.fc1(x)
         x = self.act(x)
@@ -152,7 +147,6 @@ class MLPLayer(nn.Module):
         x = self.fc2(x)
         x = self.drop(x)
         return x
-
 class Model(nn.Module):
     def __init__(self, configs):
         super(Model, self).__init__()

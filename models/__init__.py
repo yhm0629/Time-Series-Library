@@ -6,7 +6,7 @@ from . import Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN
 from . import TemporalFusionTransformer, SCINet, PAttn, TimeXer
 from . import WPMixer, MultiPatchFormer, KANAD, MSGNet, TimeFilter
 from . import UniConvNet1D
-from . import Unifft
+from . import uni_fft_1D_forecast_ascending_order as Unifft
 from . import unifftnet
 from . import DistriNet
 
@@ -57,36 +57,6 @@ try:
 except ImportError:
     UniConvNet_A = None
 
-try:
-    from . import Unifft_P0
-except ImportError:
-    Unifft_P0 = None
-
-try:
-    from . import Unifft_P1
-except ImportError:
-    Unifft_P1 = None
-
-try:
-    from . import Unifft_P2
-except ImportError:
-    Unifft_P2 = None
-
-try:
-    from . import Unifft_B
-except ImportError:
-    Unifft_B = None
-
-try:
-    from . import Unifft_L
-except ImportError:
-    Unifft_L = None
-
-try:
-    from . import Unifft_XL
-except ImportError:
-    Unifft_XL = None
-
 __all__ = [
     'Autoformer', 'Transformer', 'TimesNet', 'Nonstationary_Transformer',
     'DLinear', 'FEDformer', 'Informer', 'LightTS', 'Reformer', 'ETSformer',
@@ -95,6 +65,6 @@ __all__ = [
     'MambaSimple', 'TemporalFusionTransformer', 'SCINet', 'PAttn', 'TimeXer',
     'WPMixer', 'MultiPatchFormer', 'KANAD', 'MSGNet', 'TimeFilter',
     'Sundial', 'TimeMoE', 'Chronos', 'Moirai', 'TiRex', 'TimesFM', 'Chronos2',
-    'Unifft', 'UniConvNet1D', 'UniConvNet_A', 'Unifft_P0', 'Unifft_P1', 'Unifft_P2', 'Unifft_B', 'Unifft_L', 'Unifft_XL',
+    'Unifft', 'UniConvNet1D',
     'unifftnet', 'DistriNet'
 ]
