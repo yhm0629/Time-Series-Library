@@ -6,7 +6,7 @@ from . import Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN
 from . import TemporalFusionTransformer, SCINet, PAttn, TimeXer
 from . import WPMixer, MultiPatchFormer, KANAD, MSGNet, TimeFilter
 from . import UniConvNet1D
-from . import uni_fft_1D_forecast_ascending_order as Unifft
+from . import uni_fft_1D_forecast_ascending_order_channelisolation as Unifft
 from . import unifftnet
 from . import DistriNet
 

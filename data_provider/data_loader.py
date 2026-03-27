@@ -62,6 +62,11 @@ class Dataset_ETT_hour(Dataset):
             
         border1s = [0, 12 * 30 * 24 - self.seq_len, 12 * 30 * 24 + 4 * 30 * 24 - self.seq_len]
         border2s = [12 * 30 * 24, 12 * 30 * 24 + 4 * 30 * 24, 12 * 30 * 24 + 8 * 30 * 24]
+        
+        if self.set_type == 0 and self.args is not None and hasattr(self.args, 'few_shot_ratio'):
+            original_train_len = border2s[0] - border1s[0]
+            border2s[0] = border1s[0] + int(original_train_len * self.args.few_shot_ratio)
+
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
@@ -162,6 +167,11 @@ class Dataset_ETT_minute(Dataset):
 
         border1s = [0, 12 * 30 * 24 * 4 - self.seq_len, 12 * 30 * 24 * 4 + 4 * 30 * 24 * 4 - self.seq_len]
         border2s = [12 * 30 * 24 * 4, 12 * 30 * 24 * 4 + 4 * 30 * 24 * 4, 12 * 30 * 24 * 4 + 8 * 30 * 24 * 4]
+        
+        if self.set_type == 0 and self.args is not None and hasattr(self.args, 'few_shot_ratio'):
+            original_train_len = border2s[0] - border1s[0]
+            border2s[0] = border1s[0] + int(original_train_len * self.args.few_shot_ratio)
+
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
@@ -274,6 +284,11 @@ class Dataset_Custom(Dataset):
         num_vali = len(df_raw) - num_train - num_test
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]
+        
+        if self.set_type == 0 and self.args is not None and hasattr(self.args, 'few_shot_ratio'):
+            original_train_len = border2s[0] - border1s[0]
+            border2s[0] = border1s[0] + int(original_train_len * self.args.few_shot_ratio)
+
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
@@ -813,7 +828,7 @@ class UEAloader(Dataset):
         # sample index (i.e. the same scheme as all datasets in this project)
 
         df = pd.concat((pd.DataFrame({col: df.loc[row, col] for col in df.columns}).reset_index(drop=True).set_index(
-            pd.Series(lengths[row, 0] * [row])) for row in range(df.shape[0])), axis=0)
+            pd.Series(np.max(lengths[row, :]) * [row])) for row in range(df.shape[0])), axis=0)
 
         # Replace NaN values
         grp = df.groupby(by=df.index)
