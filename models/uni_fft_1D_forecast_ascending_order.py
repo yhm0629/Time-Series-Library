@@ -345,8 +345,9 @@ class Model(nn.Module):
                 out_features=self.num_class,
                 drop=self.dropout_rate
             )
-        elif self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        elif self.task_name in ['long_term_forecast', 'short_term_forecast', 'few_shot_forecast']:
             # 预测任务头 (映射到未来 pred_len)
+            # 少样本预测本质上也是回归，因此输出维度保持为 pred_len * enc_in
             self.head = nn.Linear(dims[-1] * self.last_len, self.pred_len * self.enc_in)
         else:
             raise ValueError(f"Not available: {self.task_name}")
@@ -432,12 +433,12 @@ class Model(nn.Module):
             # 直接返回 Logits
             return x
             
-        elif self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            # 路径 C：预测任务
+        elif self.task_name in ['long_term_forecast', 'short_term_forecast', 'few_shot_forecast']:
+            # 路径 C：预测/少样本预测任务
             x = self.head(x)
             x = x.reshape(x.shape[0], self.pred_len, self.enc_in)
 
-            # 预测任务需要逆平稳化还原量纲
+            # 预测任务必须进行逆平稳化还原量纲，否则少样本训练时 Loss 会因量纲问题难以收敛
             x = self.revin(x, mode='denorm')
             return x
 

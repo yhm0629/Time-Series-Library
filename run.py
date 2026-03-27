@@ -8,14 +8,16 @@ from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
 from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
 from exp.exp_zero_shot_forecasting import Exp_Zero_Shot_Forecast
+from exp.exp_few_shot_forecasting import Exp_Few_Shot_Forecast
 from utils.print_args import print_args
 import random
 import numpy as np
 
 def print_model_params(model):
     """
-    针对工业级场景的模型参数分析工具
-    解决了：Buffer统计缺失、可训练性未区分、权重共享重复计算、内存占用评估、量级自适应显示。
+    Model parameter analysis tool for industrial scenarios.
+    Solves: Buffer statistics missing, trainability not distinguished, 
+    weight sharing duplicate calculation, memory usage evaluation, magnitude adaptive display.
     """
     total_params = 0
     trainable_params = 0
@@ -23,14 +25,14 @@ def print_model_params(model):
     buffer_params = 0
     total_mem_bytes = 0
     
-    # 1. 使用 set 去重，处理权重共享（Weight Tying）
+    # 1. Use set to deduplicate, handling weight sharing (Weight Tying)
     seen_params = set()
     
-    # 2. 统计 Parameters (含可训练性区分)
+    # 2. Count Parameters (including trainability distinction)
     for p in model.parameters():
         if p not in seen_params:
             num_el = p.numel()
-            # 过滤未初始化的 Lazy 层
+            # Filter uninitialized Lazy layers
             if isinstance(num_el, int) and num_el == 0:
                 continue
                 
@@ -43,13 +45,13 @@ def print_model_params(model):
                 non_trainable_params += num_el
             seen_params.add(p)
 
-    # 3. 统计 Buffers (解决定义域缺失，如 BatchNorm 的 running_mean)
+    # 3. Count Buffers (solving domain missing, e.g., BatchNorm's running_mean)
     for b in model.buffers():
         num_el = b.numel()
         buffer_params += num_el
         total_mem_bytes += num_el * b.element_size()
 
-    # 4. 辅助格式化函数
+    # 4. Helper formatting functions
     def format_count(x):
         if x >= 1e9: return f"{x / 1e9:.3f} B"
         if x >= 1e6: return f"{x / 1e6:.3f} M"
@@ -62,7 +64,7 @@ def print_model_params(model):
             b /= 1024
         return f"{b:.2f} PB"
 
-    # 5. 输出结构化报告
+    # 5. Output structured report
     print(f" {'Total Parameters':<20}: {format_count(total_params)}")
     print(f" {'Estimated Memory':<20}: {format_bytes(total_mem_bytes)}")
 if __name__ == '__main__':
@@ -75,7 +77,7 @@ if __name__ == '__main__':
 
     # basic config
     parser.add_argument('--task_name', type=str, required=True, default='long_term_forecast',
-                        help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
+                        help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection, zero_shot_forecast, few_shot_forecast]')
     parser.add_argument('--is_training', type=int, required=True, default=1, help='status')
     parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
     parser.add_argument('--model', type=str, required=True, default='Autoformer',
@@ -244,6 +246,8 @@ if __name__ == '__main__':
         Exp = Exp_Classification
     elif args.task_name == 'zero_shot_forecast':
         Exp = Exp_Zero_Shot_Forecast
+    elif args.task_name == 'few_shot_forecast':
+        Exp = Exp_Few_Shot_Forecast
     else:
         Exp = Exp_Long_Term_Forecast
 
@@ -252,7 +256,6 @@ if __name__ == '__main__':
             # setting record of experiments
             exp = Exp(args)  # set experiments
             
-            # 改进后的参数打印调用
             print_model_params(exp.model)
             
             setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
