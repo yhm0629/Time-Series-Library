@@ -1,0 +1,6 @@
+zero_shot_forecast_test_Unifft_ETTh1_ftM_sl96_ll48_pl96_dm512_nh8_el2_dl1_df2048_expand2_dc4_fc1_ebtimeF_dtTrue_test_0  
+mse:0.3542918860912323, mae:0.387099951505661, dtw:Not calculated
+
+zero_shot_forecast_test_Unifft_ETTh1_ftM_sl96_ll48_pl192_dm512_nh8_el2_dl1_df2048_expand2_dc4_fc1_ebtimeF_dtTrue_test_0  
+mse:0.44404172897338867, mae:0.43190687894821167, dtw:Not calculated
+
