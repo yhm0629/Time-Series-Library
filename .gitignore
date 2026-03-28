@@ -166,6 +166,7 @@ result_long_term_forecast.txt
 result_anomaly_detection.txt
 scripts/augmentation/
 result_imputation.txt
+result_few_shot_forecast.txt
 run_anylearn.py
 environment.txt
 README_zh.md

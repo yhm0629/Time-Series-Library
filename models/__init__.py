@@ -5,9 +5,7 @@ from . import Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer
 from . import Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN
 from . import TemporalFusionTransformer, SCINet, PAttn, TimeXer
 from . import WPMixer, MultiPatchFormer, KANAD, MSGNet, TimeFilter
-from . import UniConvNet1D
 from . import uni_fft_1D_forecast_ascending_order as Unifft
-from . import unifftnet
 from . import DistriNet
 
 # Optional models - gracefully skip if dependencies are missing
@@ -65,6 +63,5 @@ __all__ = [
     'MambaSimple', 'TemporalFusionTransformer', 'SCINet', 'PAttn', 'TimeXer',
     'WPMixer', 'MultiPatchFormer', 'KANAD', 'MSGNet', 'TimeFilter',
     'Sundial', 'TimeMoE', 'Chronos', 'Moirai', 'TiRex', 'TimesFM', 'Chronos2',
-    'Unifft', 'UniConvNet1D',
-    'unifftnet', 'DistriNet'
+    'Unifft', 'DistriNet'
 ]

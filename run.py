@@ -94,6 +94,11 @@ if __name__ == '__main__':
                         help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
     parser.add_argument('--few_shot_ratio', type=float, default=1.0, help='Ratio of training data to use for few-shot learning')
+    
+    # zero-shot testing data loader
+    parser.add_argument('--test_data', type=str, default='ETTh2', help='target dataset for zero-shot testing')
+    parser.add_argument('--test_data_path', type=str, default='ETTh2.csv', help='target data file for zero-shot testing')
+    parser.add_argument('--test_root_path', type=str, default=None, help='root path of target data file (optional)')
 
     # forecasting task
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
@@ -282,13 +287,39 @@ if __name__ == '__main__':
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
 
+            if args.task_name == 'zero_shot_forecast':
+                source_data = args.data
+                source_data_path = args.data_path
+                source_root_path = args.root_path
+
+                args.data = args.test_data
+                args.data_path = args.test_data_path
+                if args.test_root_path is not None:
+                    args.root_path = args.test_root_path
+
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
+
+            if args.task_name == 'zero_shot_forecast':
+                args.data = source_data
+                args.data_path = source_data_path
+                args.root_path = source_root_path
+
             if args.gpu_type == 'mps':
                 torch.backends.mps.empty_cache()
             elif args.gpu_type == 'cuda':
                 torch.cuda.empty_cache()
     else:
+        if args.task_name == 'zero_shot_forecast':
+            source_data = args.data
+            source_data_path = args.data_path
+            source_root_path = args.root_path
+            
+            args.data = args.test_data
+            args.data_path = args.test_data_path
+            if args.test_root_path is not None:
+                args.root_path = args.test_root_path
+        
         exp = Exp(args)  # set experiments
         ii = 0
         setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
@@ -314,6 +345,12 @@ if __name__ == '__main__':
 
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1)
+        
+        if args.task_name == 'zero_shot_forecast':
+            args.data = source_data
+            args.data_path = source_data_path
+            args.root_path = source_root_path
+        
         if args.gpu_type == 'mps':
             torch.backends.mps.empty_cache()
         elif args.gpu_type == 'cuda':
