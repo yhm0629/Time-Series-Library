@@ -1,10 +1,10 @@
 import os
 import torch
-from models import Autoformer, Transformer, TimesNet, Nonstationary_Transformer, DLinear, FEDformer, \
+from models import Autoformer, Transformer, TimesNet, Nonstationary_Transformer, DLinear, FEDformer, FEDformer_RFA, \
     Informer, LightTS, Reformer, ETSformer, Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer, \
     Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN, MambaSimple, TemporalFusionTransformer, SCINet, PAttn, TimeXer, \
     WPMixer, MultiPatchFormer, KANAD, MSGNet, TimeFilter, Sundial, TimeMoE, Chronos, Moirai, TiRex,\
-    TimesFM, Chronos2, Unifft, DistriNet
+    TimesFM, Chronos2, Unifft, DistriNet, Informer_RFA, TimesNet_RFA
 
 
 class Exp_Basic(object):
@@ -17,6 +17,7 @@ class Exp_Basic(object):
             'Nonstationary_Transformer': Nonstationary_Transformer,
             'DLinear': DLinear,
             'FEDformer': FEDformer,
+            'FEDformer_RFA': FEDformer_RFA,
             'Informer': Informer,
             'LightTS': LightTS,
             'Reformer': Reformer,
@@ -51,7 +52,9 @@ class Exp_Basic(object):
             'TimesFM': TimesFM,
             'Chronos2': Chronos2,
             'Unifft': Unifft,
-            'DistriNet': DistriNet
+            'DistriNet': DistriNet,
+            'Informer_RFA': Informer_RFA,
+            'TimesNet_RFA': TimesNet_RFA
         }
         if args.model == 'Mamba':
             print('Please make sure you have successfully installed mamba_ssm')

@@ -208,6 +208,15 @@ class Exp_Zero_Shot_Forecast(Exp_Basic):
 
                     preds.append(outputs)
                     trues.append(batch_y)
+                    
+                    if i % 20 == 0:
+                        input_data = batch_x.detach().cpu().numpy()
+                        if test_data.scale and self.args.inverse:
+                            shape = input_data.shape
+                            input_data = test_data.inverse_transform(input_data.reshape(shape[0] * shape[1], -1)).reshape(shape)
+                        gt = np.concatenate((input_data[0, :, -1], batch_y[0, :, -1]), axis=0)
+                        pd = np.concatenate((input_data[0, :, -1], outputs[0, :, -1]), axis=0)
+                        visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
 
             preds = np.concatenate(preds, axis=0)
             trues = np.concatenate(trues, axis=0)

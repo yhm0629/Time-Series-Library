@@ -11,8 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_, DropPath
 from timm.models.registry import register_model
-
-from layers.dcnv4_1D import DCNv3_1D
+from layers.dcnv4_1D_Gaussian import DCNv3_1D
 from layers.fft_seek import PeriodEstimator
 
 class RevIN(nn.Module):
@@ -346,8 +345,6 @@ class Model(nn.Module):
                 drop=self.dropout_rate
             )
         elif self.task_name in ['long_term_forecast', 'short_term_forecast', 'few_shot_forecast', 'zero_shot_forecast']:
-            # Ԥͷ (ӳ䵽δ pred_len)
-            # ԤⱾҲǻع飬άȱΪ pred_len * enc_in
             self.head = nn.Linear(dims[-1] * self.last_len, self.pred_len * self.enc_in)
         else:
             raise ValueError(f"Not available: {self.task_name}")

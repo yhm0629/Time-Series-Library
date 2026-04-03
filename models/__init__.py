@@ -1,6 +1,6 @@
 # Core models with stable dependencies
 from . import Autoformer, Transformer, TimesNet, Nonstationary_Transformer
-from . import DLinear, FEDformer, Informer, LightTS, Reformer, ETSformer
+from . import DLinear, FEDformer, FEDformer_RFA, Informer_RFA, Informer, LightTS, Reformer, ETSformer, TimesNet_RFA
 from . import Pyraformer, PatchTST, MICN, Crossformer, FiLM, iTransformer
 from . import Koopa, TiDE, FreTS, TimeMixer, TSMixer, SegRNN
 from . import TemporalFusionTransformer, SCINet, PAttn, TimeXer
@@ -50,18 +50,13 @@ try:
 except ImportError:
     Chronos2 = None
 
-try:
-    from . import UniConvNet_A
-except ImportError:
-    UniConvNet_A = None
-
 __all__ = [
     'Autoformer', 'Transformer', 'TimesNet', 'Nonstationary_Transformer',
-    'DLinear', 'FEDformer', 'Informer', 'LightTS', 'Reformer', 'ETSformer',
+    'DLinear', 'FEDformer', 'FEDformer_RFA', 'Informer', 'LightTS', 'Reformer', 'ETSformer',
     'Pyraformer', 'PatchTST', 'MICN', 'Crossformer', 'FiLM', 'iTransformer',
     'Koopa', 'TiDE', 'FreTS', 'TimeMixer', 'TSMixer', 'SegRNN',
     'MambaSimple', 'TemporalFusionTransformer', 'SCINet', 'PAttn', 'TimeXer',
     'WPMixer', 'MultiPatchFormer', 'KANAD', 'MSGNet', 'TimeFilter',
     'Sundial', 'TimeMoE', 'Chronos', 'Moirai', 'TiRex', 'TimesFM', 'Chronos2',
-    'Unifft', 'DistriNet'
+    'Unifft', 'DistriNet', 'Informer_RFA', 'TimesNet_RFA'
 ]

@@ -937,3 +937,51 @@ class PEMSLoader(Dataset):
 
     def inverse_transform(self, data):
         return self.scaler.inverse_transform(data)
+
+class UCRAnomalyLoader(Dataset):
+    def __init__(self, args, root_path, win_size, step=1, flag="train"):
+        self.args = args
+        self.win_size = win_size
+        self.flag = flag
+        
+        file_name = args.data_path 
+        parts = file_name.replace(".txt", "").split("_")
+        train_len = int(parts[-3])
+        anomaly_start = int(parts[-2])
+        anomaly_end = int(parts[-1])
+
+        data = pd.read_csv(os.path.join(root_path, file_name), header=None).values.flatten()
+        
+        train_data = data[:train_len]
+        test_data = data[train_len:]
+        
+        self.scaler = StandardScaler()
+        self.scaler.fit(train_data.reshape(-1, 1))
+        
+        if flag == 'train':
+            self.data = self.scaler.transform(train_data.reshape(-1, 1))
+            self.labels = np.zeros(len(self.data))
+        else:
+            self.data = self.scaler.transform(test_data.reshape(-1, 1))
+            self.labels = np.zeros(len(test_data))
+            rel_start = anomaly_start - train_len
+            rel_end = anomaly_end - train_len
+            self.labels[max(0, rel_start):min(len(test_data), rel_end)] = 1
+        
+        if flag == 'val':
+            val_len = int(len(train_data) * 0.2)
+            self.data = self.scaler.transform(train_data[-val_len:].reshape(-1, 1))
+            self.labels = np.zeros(len(self.data))
+
+    def __len__(self):
+        return len(self.data) - self.win_size
+
+    def __getitem__(self, index):
+        x = self.data[index : index + self.win_size]
+        
+        target_val = self.data[index + self.win_size]
+        target_label = self.labels[index + self.win_size]
+        
+        y = np.array([target_val[0], target_label]) 
+        
+        return torch.FloatTensor(x), torch.FloatTensor(y)

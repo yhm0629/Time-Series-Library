@@ -1,11 +1,8 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, adjustment
-from sklearn.metrics import precision_recall_fscore_support
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 import torch.multiprocessing
-
-torch.multiprocessing.set_sharing_strategy('file_system')
 import torch
 import torch.nn as nn
 from torch import optim
@@ -13,9 +10,10 @@ import os
 import time
 import warnings
 import numpy as np
+from utils.metrics import calculate_metrics
 
+torch.multiprocessing.set_sharing_strategy('file_system')
 warnings.filterwarnings('ignore')
-
 
 class Exp_Anomaly_Detection(Exp_Basic):
     def __init__(self, args):
@@ -44,17 +42,22 @@ class Exp_Anomaly_Detection(Exp_Basic):
         total_loss = []
         self.model.eval()
         with torch.no_grad():
-            for i, (batch_x, _) in enumerate(vali_loader):
+            for i, (batch_x, batch_y) in enumerate(vali_loader):
                 batch_x = batch_x.float().to(self.device)
 
                 outputs = self.model(batch_x, None, None, None)
 
-                f_dim = -1 if self.args.features == 'MS' else 0
-                outputs = outputs[:, :, f_dim:]
-                pred = outputs.detach()
-                true = batch_x.detach()
+                if self.args.data == 'UCRAnomaly':
+                    pred = outputs[:, -1, :].squeeze(-1).detach()
+                    true_next_point = batch_y[:, 0].float().to(self.device).detach()
+                    loss = criterion(pred, true_next_point)
+                else:
+                    f_dim = -1 if self.args.features == 'MS' else 0
+                    outputs = outputs[:, :, f_dim:]
+                    pred = outputs.detach()
+                    true = batch_x.detach()
+                    loss = criterion(pred, true)
 
-                loss = criterion(pred, true)
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
@@ -91,9 +94,15 @@ class Exp_Anomaly_Detection(Exp_Basic):
 
                 outputs = self.model(batch_x, None, None, None)
 
-                f_dim = -1 if self.args.features == 'MS' else 0
-                outputs = outputs[:, :, f_dim:]
-                loss = criterion(outputs, batch_x)
+                if self.args.data == 'UCRAnomaly':
+                    outputs = outputs[:, -1, :].squeeze(-1)
+                    true_next_point = batch_y[:, 0].float().to(self.device)
+                    loss = criterion(outputs, true_next_point)
+                else:
+                    f_dim = -1 if self.args.features == 'MS' else 0
+                    outputs = outputs[:, :, f_dim:]
+                    loss = criterion(outputs, batch_x)
+                    
                 train_loss.append(loss.item())
 
                 if (i + 1) % 100 == 0:
@@ -132,7 +141,6 @@ class Exp_Anomaly_Detection(Exp_Basic):
             print('loading model')
             self.model.load_state_dict(torch.load(os.path.join('./checkpoints/' + setting, 'checkpoint.pth')))
 
-        attens_energy = []
         folder_path = './test_results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -140,68 +148,91 @@ class Exp_Anomaly_Detection(Exp_Basic):
         self.model.eval()
         self.anomaly_criterion = nn.MSELoss(reduce=False)
 
-        # (1) stastic on the train set
-        with torch.no_grad():
-            for i, (batch_x, batch_y) in enumerate(train_loader):
+        if self.args.data == 'UCRAnomaly':
+            attens_energy = []
+            test_labels = []
+
+            with torch.no_grad():
+                for i, (batch_x, batch_y) in enumerate(test_loader):
+                    batch_x = batch_x.float().to(self.device)
+                    outputs = self.model(batch_x, None, None, None)[:, -1, :].squeeze(-1)
+                    
+                    true_next_point = batch_y[:, 0].float().to(self.device)
+                    true_label = batch_y[:, 1].numpy()
+                    
+                    score = (outputs - true_next_point) ** 2
+                    
+                    attens_energy.append(score.cpu().numpy())
+                    test_labels.append(true_label)
+
+            test_energy = np.concatenate(attens_energy, axis=0).flatten()
+            gt_labels = np.concatenate(test_labels, axis=0).flatten()
+
+            f1, f1e, f1d, auprc = calculate_metrics(test_energy, gt_labels)
+            
+            print(f">>>> UCR Metrics for {self.args.data_path} <<<<")
+            print(f"F1 (Best): {f1:.4f} | F1e: {f1e:.4f} | F1d: {f1d:.4f} | AUPRC: {auprc:.4f}")
+            
+            f = open("result_anomaly_detection.txt", 'a')
+            f.write(setting + "  \n")
+            f.write(f"Dataset: {self.args.data_path} | F1: {f1:.4f} | F1e: {f1e:.4f} | F1d: {f1d:.4f} | AUPRC: {auprc:.4f}\n\n")
+            f.close()
+
+        else:
+            attens_energy = []
+            with torch.no_grad():
+                for i, (batch_x, batch_y) in enumerate(train_loader):
+                    batch_x = batch_x.float().to(self.device)
+                    outputs = self.model(batch_x, None, None, None)
+                    score = torch.mean(self.anomaly_criterion(batch_x, outputs), dim=-1)
+                    score = score.detach().cpu().numpy()
+                    attens_energy.append(score)
+
+            attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
+            train_energy = np.array(attens_energy)
+
+            attens_energy = []
+            test_labels = []
+            for i, (batch_x, batch_y) in enumerate(test_loader):
                 batch_x = batch_x.float().to(self.device)
-                # reconstruction
                 outputs = self.model(batch_x, None, None, None)
-                # criterion
                 score = torch.mean(self.anomaly_criterion(batch_x, outputs), dim=-1)
                 score = score.detach().cpu().numpy()
                 attens_energy.append(score)
+                test_labels.append(batch_y)
 
-        attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
-        train_energy = np.array(attens_energy)
+            attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
+            test_energy = np.array(attens_energy)
+            combined_energy = np.concatenate([train_energy, test_energy], axis=0)
+            threshold = np.percentile(combined_energy, 100 - self.args.anomaly_ratio)
+            print("Threshold :", threshold)
 
-        # (2) find the threshold
-        attens_energy = []
-        test_labels = []
-        for i, (batch_x, batch_y) in enumerate(test_loader):
-            batch_x = batch_x.float().to(self.device)
-            # reconstruction
-            outputs = self.model(batch_x, None, None, None)
-            # criterion
-            score = torch.mean(self.anomaly_criterion(batch_x, outputs), dim=-1)
-            score = score.detach().cpu().numpy()
-            attens_energy.append(score)
-            test_labels.append(batch_y)
+            pred = (test_energy > threshold).astype(int)
+            test_labels = np.concatenate(test_labels, axis=0).reshape(-1)
+            test_labels = np.array(test_labels)
+            gt = test_labels.astype(int)
 
-        attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
-        test_energy = np.array(attens_energy)
-        combined_energy = np.concatenate([train_energy, test_energy], axis=0)
-        threshold = np.percentile(combined_energy, 100 - self.args.anomaly_ratio)
-        print("Threshold :", threshold)
+            print("pred:   ", pred.shape)
+            print("gt:     ", gt.shape)
 
-        # (3) evaluation on the test set
-        pred = (test_energy > threshold).astype(int)
-        test_labels = np.concatenate(test_labels, axis=0).reshape(-1)
-        test_labels = np.array(test_labels)
-        gt = test_labels.astype(int)
+            gt, pred = adjustment(gt, pred)
 
-        print("pred:   ", pred.shape)
-        print("gt:     ", gt.shape)
+            pred = np.array(pred)
+            gt = np.array(gt)
+            print("pred: ", pred.shape)
+            print("gt:   ", gt.shape)
 
-        # (4) detection adjustment
-        gt, pred = adjustment(gt, pred)
+            accuracy = accuracy_score(gt, pred)
+            precision, recall, f_score, support = precision_recall_fscore_support(gt, pred, average='binary')
+            print("Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f} ".format(
+                accuracy, precision,
+                recall, f_score))
 
-        pred = np.array(pred)
-        gt = np.array(gt)
-        print("pred: ", pred.shape)
-        print("gt:   ", gt.shape)
+            f = open("result_anomaly_detection.txt", 'a')
+            f.write(setting + "  \n")
+            f.write("Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f} \n\n".format(
+                accuracy, precision,
+                recall, f_score))
+            f.close()
 
-        accuracy = accuracy_score(gt, pred)
-        precision, recall, f_score, support = precision_recall_fscore_support(gt, pred, average='binary')
-        print("Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f} ".format(
-            accuracy, precision,
-            recall, f_score))
-
-        f = open("result_anomaly_detection.txt", 'a')
-        f.write(setting + "  \n")
-        f.write("Accuracy : {:0.4f}, Precision : {:0.4f}, Recall : {:0.4f}, F-score : {:0.4f} ".format(
-            accuracy, precision,
-            recall, f_score))
-        f.write('\n')
-        f.write('\n')
-        f.close()
         return
